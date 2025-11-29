@@ -1,0 +1,43 @@
+# Compiled class files
+*.class
+target/
+*.jar
+*.war
+*.ear
+
+# Log files
+*.log
+logs/
+
+# Maven
+.mvn/
+mvn.cmd
+mvnw
+mvnw.cmd
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Application specific
+checkpoint/
+models/*.model
+data/*.csv
+*.tmp
+
+# Spark
+metastore_db/
+derby.log
+spark-warehouse/
+
+.git.azad_disabled/

@@ -1,0 +1,177 @@
+package com.botsense.stream.config;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Gestionnaire de configuration centralisé
+ * Charge et gère les paramètres de l'application
+ */
+public class ConfigurationManager {
+    private static final Logger logger = LoggerFactory.getLogger(ConfigurationManager.class);
+    private static final String CONFIG_FILE = "application.properties";
+    
+    private Properties properties;
+    
+    public ConfigurationManager() throws IOException {
+        this.properties = new Properties();
+        loadConfiguration();
+    }
+    
+    /**
+     * Charge la configuration depuis le fichier properties
+     */
+    private void loadConfiguration() throws IOException {
+        try (InputStream input = getClass().getClassLoader()
+                .getResourceAsStream(CONFIG_FILE)) {
+            
+            if (input == null) {
+                logger.warn("Configuration file not found: {}, using defaults", CONFIG_FILE);
+                loadDefaults();
+                return;
+            }
+            
+            properties.load(input);
+            logger.info("Configuration loaded from: {}", CONFIG_FILE);
+            
+        } catch (IOException e) {
+            logger.error("Error loading configuration", e);
+            throw e;
+        }
+    }
+    
+    /**
+     * Charge les valeurs par défaut
+     */
+    private void loadDefaults() {
+        // Kafka
+        properties.setProperty("kafka.bootstrap.servers", "localhost:9092");
+        properties.setProperty("kafka.topic.input", "bot-traffic");
+        properties.setProperty("kafka.topic.output", "bot-detections");
+        properties.setProperty("kafka.group.id", "botsense-consumer-group");
+        
+        // Spark
+        properties.setProperty("spark.app.name", "BotSense-Stream");
+        properties.setProperty("spark.master", "local[*]");
+        properties.setProperty("spark.streaming.batch.interval", "5000");
+        
+        // Modèle
+        properties.setProperty("model.ensemble.size", "10");
+        properties.setProperty("model.grace.period", "200");
+        properties.setProperty("model.split.confidence", "0.0001");
+        
+        // Détection
+        properties.setProperty("detection.threshold", "0.7");
+        properties.setProperty("detection.update.frequency", "1000");
+        
+        // Dérive
+        properties.setProperty("drift.detection.enabled", "true");
+        properties.setProperty("drift.warning.level", "0.05");
+        
+        // Monitoring
+        properties.setProperty("monitoring.enabled", "true");
+        properties.setProperty("monitoring.dashboard.port", "8080");
+        
+        // Générateur
+        properties.setProperty("generator.rate", "1000");
+        properties.setProperty("generator.bot.ratio", "0.3");
+        properties.setProperty("generator.evolution.enabled", "true");
+    }
+    
+    /**
+     * Récupère une propriété String
+     */
+    public String getString(String key, String defaultValue) {
+        return properties.getProperty(key, defaultValue);
+    }
+    
+    /**
+     * Récupère une propriété int
+     */
+    public int getInt(String key, int defaultValue) {
+        String value = properties.getProperty(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            logger.warn("Invalid integer for key {}: {}, using default: {}",
+                       key, value, defaultValue);
+            return defaultValue;
+        }
+    }
+    
+    /**
+     * Récupère une propriété long
+     */
+    public long getLong(String key, long defaultValue) {
+        String value = properties.getProperty(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            logger.warn("Invalid long for key {}: {}, using default: {}",
+                       key, value, defaultValue);
+            return defaultValue;
+        }
+    }
+    
+    /**
+     * Récupère une propriété double
+     */
+    public double getDouble(String key, double defaultValue) {
+        String value = properties.getProperty(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException e) {
+            logger.warn("Invalid double for key {}: {}, using default: {}",
+                       key, value, defaultValue);
+            return defaultValue;
+        }
+    }
+    
+    /**
+     * Récupère une propriété boolean
+     */
+    public boolean getBoolean(String key, boolean defaultValue) {
+        String value = properties.getProperty(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        return Boolean.parseBoolean(value);
+    }
+    
+    /**
+     * Définit une propriété
+     */
+    public void setProperty(String key, String value) {
+        properties.setProperty(key, value);
+    }
+    
+    /**
+     * Affiche toutes les propriétés
+     */
+    public void printConfiguration() {
+        logger.info("=== Configuration ===");
+        properties.forEach((key, value) -> 
+            logger.info("  {} = {}", key, value)
+        );
+    }
+    
+    /**
+     * Retourne toutes les propriétés
+     */
+    public Properties getProperties() {
+        return (Properties) properties.clone();
+    }
+}

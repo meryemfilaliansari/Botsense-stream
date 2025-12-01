@@ -1,23 +1,24 @@
 package com.botsense.stream.core.drift;
 
-import moa.classifiers.core.driftdetection.ADWIN;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import moa.classifiers.core.driftdetection.ADWIN;
+
 /**
- * Détecteur de dérive de concept utilisant ADWIN
- * Surveille l'évolution des performances et détecte les changements de distribution
+ * Détecteur de dérive de concept utilisant ADWIN - VERSION CORRIGÉE
  */
 public class DriftDetector implements Serializable {
     private static final long serialVersionUID = 1L;
     private static final Logger logger = LoggerFactory.getLogger(DriftDetector.class);
     
     private ADWIN adwin;
+    private double delta; // ✅ AJOUTÉ : Stocker le delta pour reset
     private double warningLevel;
     private double driftLevel;
     
@@ -37,7 +38,7 @@ public class DriftDetector implements Serializable {
     }
     
     public DriftDetector(double delta) {
-        // CORRECTION : ADWIN prend le delta dans le constructeur, pas avec setDelta()
+        this.delta = delta; // ✅ CORRECTION : Stocker le delta
         this.adwin = new ADWIN(delta);
         this.warningLevel = 0.05;
         this.driftLevel = 0.001;
@@ -52,17 +53,11 @@ public class DriftDetector implements Serializable {
     
     /**
      * Ajoute une observation et vérifie la dérive
-     * @param prediction prédiction du modèle
-     * @param actual valeur réelle
-     * @return état de détection
      */
     public DriftDetectionResult addObservation(boolean prediction, boolean actual) {
         totalChecks.incrementAndGet();
         
-        // Calculer l'erreur (0 = correct, 1 = erreur)
         double error = (prediction == actual) ? 0.0 : 1.0;
-        
-        // Ajouter à ADWIN
         boolean changeDetected = adwin.setInput(error);
         currentErrorRate = adwin.getEstimation();
         
@@ -71,7 +66,6 @@ public class DriftDetector implements Serializable {
         result.setErrorRate(currentErrorRate);
         result.setWindowLength(adwin.getWidth());
         
-        // Vérifier les seuils
         if (changeDetected) {
             result.setDriftDetected(true);
             driftsDetected.incrementAndGet();
@@ -110,24 +104,14 @@ public class DriftDetector implements Serializable {
         }
         
         result.setInWarningZone(inWarningZone);
-        
         return result;
-    }
-    
-    /**
-     * Vérifie si un réapprentissage est nécessaire
-     */
-    public boolean shouldRetrain() {
-        return !driftHistory.isEmpty() && 
-               driftHistory.get(driftHistory.size() - 1).getType() == DriftType.DRIFT;
     }
     
     /**
      * Réinitialise le détecteur après réapprentissage
      */
     public void reset() {
-        // CORRECTION : Recréer ADWIN avec le driftLevel comme delta
-        this.adwin = new ADWIN(driftLevel);
+        this.adwin = new ADWIN(delta); // ✅ CORRECTION : Utiliser delta stocké
         inWarningZone = false;
         currentErrorRate = 0.0;
         logger.info("Drift detector reset after retraining");
@@ -145,9 +129,11 @@ public class DriftDetector implements Serializable {
         lastDriftTime = System.currentTimeMillis();
     }
     
-    /**
-     * Retourne les statistiques du détecteur
-     */
+    public boolean shouldRetrain() {
+        return !driftHistory.isEmpty() && 
+               driftHistory.get(driftHistory.size() - 1).getType() == DriftType.DRIFT;
+    }
+    
     public DriftStatistics getStatistics() {
         return new DriftStatistics(
             totalChecks.get(),
@@ -161,74 +147,33 @@ public class DriftDetector implements Serializable {
         );
     }
     
-    /**
-     * Retourne les dérives récentes
-     */
     public List<DriftEvent> getRecentDrifts(int count) {
         int size = driftHistory.size();
         int start = Math.max(0, size - count);
         return new ArrayList<>(driftHistory.subList(start, size));
     }
     
-    /**
-     * Calcule le temps depuis la dernière dérive
-     */
     public long getTimeSinceLastDrift() {
         return System.currentTimeMillis() - lastDriftTime;
     }
     
     // Getters et Setters
-    public double getCurrentErrorRate() {
-        return currentErrorRate;
-    }
+    public double getCurrentErrorRate() { return currentErrorRate; }
+    public boolean isInWarningZone() { return inWarningZone; }
+    public long getTotalChecks() { return totalChecks.get(); }
+    public long getWarningsDetected() { return warningsDetected.get(); }
+    public long getDriftsDetected() { return driftsDetected.get(); }
+    public List<DriftEvent> getDriftHistory() { return new ArrayList<>(driftHistory); }
+    public double getWarningLevel() { return warningLevel; }
+    public void setWarningLevel(double warningLevel) { this.warningLevel = warningLevel; }
+    public double getDriftLevel() { return driftLevel; }
+    public void setDriftLevel(double driftLevel) { this.driftLevel = driftLevel; }
     
-    public boolean isInWarningZone() {
-        return inWarningZone;
-    }
-    
-    public long getTotalChecks() {
-        return totalChecks.get();
-    }
-    
-    public long getWarningsDetected() {
-        return warningsDetected.get();
-    }
-    
-    public long getDriftsDetected() {
-        return driftsDetected.get();
-    }
-    
-    public List<DriftEvent> getDriftHistory() {
-        return new ArrayList<>(driftHistory);
-    }
-    
-    public double getWarningLevel() {
-        return warningLevel;
-    }
-    
-    public void setWarningLevel(double warningLevel) {
-        this.warningLevel = warningLevel;
-    }
-    
-    public double getDriftLevel() {
-        return driftLevel;
-    }
-    
-    public void setDriftLevel(double driftLevel) {
-        this.driftLevel = driftLevel;
-    }
-    
-    /**
-     * Type de dérive
-     */
     public enum DriftType {
         WARNING,
         DRIFT
     }
     
-    /**
-     * Événement de dérive
-     */
     public static class DriftEvent implements Serializable {
         private static final long serialVersionUID = 1L;
         
@@ -257,9 +202,6 @@ public class DriftDetector implements Serializable {
         }
     }
     
-    /**
-     * Résultat de détection de dérive
-     */
     public static class DriftDetectionResult implements Serializable {
         private static final long serialVersionUID = 1L;
         
@@ -276,32 +218,18 @@ public class DriftDetector implements Serializable {
             this.inWarningZone = false;
         }
         
-        // Getters et Setters
         public long getTimestamp() { return timestamp; }
         public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
-        
         public boolean isDriftDetected() { return driftDetected; }
-        public void setDriftDetected(boolean driftDetected) { 
-            this.driftDetected = driftDetected; 
-        }
-        
+        public void setDriftDetected(boolean driftDetected) { this.driftDetected = driftDetected; }
         public boolean isWarningDetected() { return warningDetected; }
-        public void setWarningDetected(boolean warningDetected) { 
-            this.warningDetected = warningDetected; 
-        }
-        
+        public void setWarningDetected(boolean warningDetected) { this.warningDetected = warningDetected; }
         public boolean isInWarningZone() { return inWarningZone; }
-        public void setInWarningZone(boolean inWarningZone) { 
-            this.inWarningZone = inWarningZone; 
-        }
-        
+        public void setInWarningZone(boolean inWarningZone) { this.inWarningZone = inWarningZone; }
         public double getErrorRate() { return errorRate; }
         public void setErrorRate(double errorRate) { this.errorRate = errorRate; }
-        
         public int getWindowLength() { return windowLength; }
-        public void setWindowLength(int windowLength) { 
-            this.windowLength = windowLength; 
-        }
+        public void setWindowLength(int windowLength) { this.windowLength = windowLength; }
         
         @Override
         public String toString() {
@@ -312,9 +240,6 @@ public class DriftDetector implements Serializable {
         }
     }
     
-    /**
-     * Statistiques de dérive
-     */
     public static class DriftStatistics implements Serializable {
         private static final long serialVersionUID = 1L;
         
@@ -341,7 +266,6 @@ public class DriftDetector implements Serializable {
             this.driftHistory = driftHistory;
         }
         
-        // Getters
         public long getTotalChecks() { return totalChecks; }
         public long getWarningsDetected() { return warningsDetected; }
         public long getDriftsDetected() { return driftsDetected; }

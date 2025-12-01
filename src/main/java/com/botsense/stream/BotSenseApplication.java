@@ -95,7 +95,7 @@ public class BotSenseApplication {
         logger.info("Initializing bot detector...");
         
         int ensembleSize = config.getInt("model.ensemble.size", 10);
-        double threshold = config.getDouble("detection.threshold", 0.7);
+        double threshold = config.getDouble("detection.threshold", 0.6);
         int updateFreq = config.getInt("detection.update.frequency", 1000);
         boolean driftEnabled = config.getBoolean("drift.detection.enabled", true);
         
